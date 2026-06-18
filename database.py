@@ -1,11 +1,11 @@
 import sqlite3
 import os
 
-DB_PATH = os.getenv("DB_PATH", "urls.db")
+DB_PATH = "/app/urls.db"   # FIXED ABSOLUTE PATH (IMPORTANT)
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 

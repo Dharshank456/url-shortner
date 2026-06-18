@@ -6,17 +6,11 @@ import validators
 
 app = Flask(__name__)
 
-# Initialize DB once when app starts
 init_db()
 
 
 def generate_short_code(length=6):
-    return ''.join(
-        random.choices(
-            string.ascii_letters + string.digits,
-            k=length
-        )
-    )
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 
 @app.route("/")
@@ -33,20 +27,12 @@ def shorten_url():
     if not validators.url(original_url):
         return "Invalid URL", 400
 
-    if custom_alias:
-        short_code = custom_alias.strip()
-    else:
-        short_code = generate_short_code()
+    short_code = custom_alias.strip() if custom_alias else generate_short_code()
 
     conn = get_connection()
 
-    # check if short code already exists
     existing = conn.execute(
-        """
-        SELECT short_code
-        FROM urls
-        WHERE short_code = ?
-        """,
+        "SELECT short_code FROM urls WHERE short_code = ?",
         (short_code,)
     ).fetchone()
 
@@ -55,20 +41,14 @@ def shorten_url():
         return "Alias already exists", 400
 
     conn.execute(
-        """
-        INSERT INTO urls (short_code, original_url)
-        VALUES (?, ?)
-        """,
+        "INSERT INTO urls (short_code, original_url) VALUES (?, ?)",
         (short_code, original_url)
     )
 
     conn.commit()
     conn.close()
 
-    return render_template(
-        "result.html",
-        short_code=short_code
-    )
+    return render_template("result.html", short_code=short_code)
 
 
 @app.route("/<short_code>")
@@ -79,11 +59,7 @@ def redirect_to_url(short_code):
     conn = get_connection()
 
     result = conn.execute(
-        """
-        SELECT original_url
-        FROM urls
-        WHERE short_code = ?
-        """,
+        "SELECT original_url FROM urls WHERE short_code = ?",
         (short_code,)
     ).fetchone()
 
@@ -91,13 +67,8 @@ def redirect_to_url(short_code):
         conn.close()
         return "URL Not Found", 404
 
-    # update click count safely
     conn.execute(
-        """
-        UPDATE urls
-        SET clicks = clicks + 1
-        WHERE short_code = ?
-        """,
+        "UPDATE urls SET clicks = clicks + 1 WHERE short_code = ?",
         (short_code,)
     )
 
@@ -115,11 +86,7 @@ def stats(short_code):
     conn = get_connection()
 
     result = conn.execute(
-        """
-        SELECT original_url, clicks
-        FROM urls
-        WHERE short_code = ?
-        """,
+        "SELECT original_url, clicks FROM urls WHERE short_code = ?",
         (short_code,)
     ).fetchone()
 
