@@ -3,21 +3,15 @@ from database import init_db, get_connection
 import random
 import string
 import validators
-import os
 
 app = Flask(__name__)
 
-
-# ✅ IMPORTANT: DO NOT RUN DB INIT AT IMPORT TIME IN CI
-# Run only when explicitly enabled
-if os.getenv("INIT_DB", "0") == "1":
-    init_db()
+# Initialize DB safely
+init_db()
 
 
 def generate_short_code(length=6):
-    return ''.join(
-        random.choices(string.ascii_letters + string.digits, k=length)
-    )
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 
 @app.route("/")
@@ -31,13 +25,16 @@ def shorten_url():
     original_url = request.form["url"]
     custom_alias = request.form.get("custom_alias")
 
+    # Validate URL
     if not validators.url(original_url):
         return "Invalid URL", 400
 
+    # Decide short code
     short_code = custom_alias.strip() if custom_alias else generate_short_code()
 
     conn = get_connection()
 
+    # Check if alias already exists
     existing = conn.execute(
         "SELECT short_code FROM urls WHERE short_code = ?",
         (short_code,)
@@ -47,6 +44,7 @@ def shorten_url():
         conn.close()
         return "Alias already exists", 400
 
+    # Insert into DB
     conn.execute(
         "INSERT INTO urls (short_code, original_url) VALUES (?, ?)",
         (short_code, original_url)
@@ -55,7 +53,13 @@ def shorten_url():
     conn.commit()
     conn.close()
 
-    return render_template("result.html", short_code=short_code)
+    # 🔥 FIX: generate correct EC2/local URL dynamically
+    short_url = request.host_url.rstrip("/") + "/" + short_code
+
+    return f"""
+    <h2>URL Created Successfully</h2>
+    <p><a href="{short_url}">{short_url}</a></p>
+    """
 
 
 @app.route("/<short_code>")
@@ -74,6 +78,7 @@ def redirect_to_url(short_code):
         conn.close()
         return "URL Not Found", 404
 
+    # update clicks
     conn.execute(
         "UPDATE urls SET clicks = clicks + 1 WHERE short_code = ?",
         (short_code,)
@@ -102,11 +107,11 @@ def stats(short_code):
     if result is None:
         return "URL Not Found", 404
 
-    return render_template(
-        "stats.html",
-        original_url=result["original_url"],
-        clicks=result["clicks"]
-    )
+    return f"""
+    <h2>Stats</h2>
+    <p>Original URL: {result['original_url']}</p>
+    <p>Clicks: {result['clicks']}</p>
+    """
 
 
 if __name__ == "__main__":
