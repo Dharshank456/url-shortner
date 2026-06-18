@@ -3,14 +3,21 @@ from database import init_db, get_connection
 import random
 import string
 import validators
+import os
 
 app = Flask(__name__)
 
-init_db()
+
+# ✅ IMPORTANT: DO NOT RUN DB INIT AT IMPORT TIME IN CI
+# Run only when explicitly enabled
+if os.getenv("INIT_DB", "0") == "1":
+    init_db()
 
 
 def generate_short_code(length=6):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+    return ''.join(
+        random.choices(string.ascii_letters + string.digits, k=length)
+    )
 
 
 @app.route("/")
