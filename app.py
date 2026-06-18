@@ -1,0 +1,135 @@
+from flask import Flask, request, redirect, render_template
+from database import init_db, get_connection
+import random
+import string
+import validators
+
+app = Flask(__name__)
+
+init_db()
+
+
+def generate_short_code(length=6):
+    return ''.join(
+        random.choices(
+            string.ascii_letters + string.digits,
+            k=length
+        )
+    )
+
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+@app.route("/shorten", methods=["POST"])
+def shorten_url():
+
+    original_url = request.form["url"]
+    custom_alias = request.form.get("custom_alias")
+
+    if not validators.url(original_url):
+        return "Invalid URL", 400
+
+    if custom_alias:
+        short_code = custom_alias.strip()
+    else:
+        short_code = generate_short_code()
+
+    conn = get_connection()
+
+    existing = conn.execute(
+        """
+        SELECT short_code
+        FROM urls
+        WHERE short_code = ?
+        """,
+        (short_code,)
+    ).fetchone()
+
+    if existing:
+        conn.close()
+        return "Alias already exists", 400
+
+    conn.execute(
+        """
+        INSERT INTO urls
+        (short_code, original_url)
+        VALUES (?, ?)
+        """,
+        (short_code, original_url)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return render_template(
+        "result.html",
+        short_code=short_code
+    )
+
+
+@app.route("/<short_code>")
+def redirect_to_url(short_code):
+
+    conn = get_connection()
+
+    result = conn.execute(
+        """
+        SELECT original_url, clicks
+        FROM urls
+        WHERE short_code = ?
+        """,
+        (short_code,)
+    ).fetchone()
+
+    if result:
+
+        conn.execute(
+            """
+            UPDATE urls
+            SET clicks = clicks + 1
+            WHERE short_code = ?
+            """,
+            (short_code,)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return redirect(result[0])
+
+    conn.close()
+
+    return "URL Not Found", 404
+
+
+@app.route("/stats/<short_code>")
+def stats(short_code):
+
+    conn = get_connection()
+
+    result = conn.execute(
+        """
+        SELECT original_url, clicks
+        FROM urls
+        WHERE short_code = ?
+        """,
+        (short_code,)
+    ).fetchone()
+
+    conn.close()
+
+    if not result:
+        return "URL Not Found", 404
+
+    return render_template(
+        "stats.html",
+        original_url=result[0],
+        clicks=result[1]
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
