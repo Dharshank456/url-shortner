@@ -113,6 +113,24 @@ jobs:
 
             docker compose pull
 
-            docker compose up -d
+            docker compose up -d --force-recreate
 
             docker image prune -f
+
+      - name: Slack Success Notification
+        if: success()
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+          --data '{
+            "text":"✅ URL Shortener deployed successfully\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}"
+          }' \
+          "${{ secrets.SLACK_WEBHOOK_URL }}"
+
+      - name: Slack Failure Notification
+        if: failure()
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+          --data '{
+            "text":"❌ URL Shortener deployment failed\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}"
+          }' \
+          "${{ secrets.SLACK_WEBHOOK_URL }}"
