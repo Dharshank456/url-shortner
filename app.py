@@ -6,6 +6,7 @@ import validators
 
 app = Flask(__name__)
 
+# Initialize DB once when app starts
 init_db()
 
 
@@ -39,6 +40,7 @@ def shorten_url():
 
     conn = get_connection()
 
+    # check if short code already exists
     existing = conn.execute(
         """
         SELECT short_code
@@ -54,8 +56,7 @@ def shorten_url():
 
     conn.execute(
         """
-        INSERT INTO urls
-        (short_code, original_url)
+        INSERT INTO urls (short_code, original_url)
         VALUES (?, ?)
         """,
         (short_code, original_url)
@@ -73,41 +74,44 @@ def shorten_url():
 @app.route("/<short_code>")
 def redirect_to_url(short_code):
 
+    short_code = short_code.strip()
+
     conn = get_connection()
 
     result = conn.execute(
         """
-        SELECT original_url, clicks
+        SELECT original_url
         FROM urls
         WHERE short_code = ?
         """,
         (short_code,)
     ).fetchone()
 
-    if result:
-
-        conn.execute(
-            """
-            UPDATE urls
-            SET clicks = clicks + 1
-            WHERE short_code = ?
-            """,
-            (short_code,)
-        )
-
-        conn.commit()
+    if result is None:
         conn.close()
+        return "URL Not Found", 404
 
-        return redirect(result[0])
+    # update click count safely
+    conn.execute(
+        """
+        UPDATE urls
+        SET clicks = clicks + 1
+        WHERE short_code = ?
+        """,
+        (short_code,)
+    )
 
+    conn.commit()
     conn.close()
 
-    return "URL Not Found", 404
+    return redirect(result["original_url"])
 
 
 @app.route("/stats/<short_code>")
 def stats(short_code):
 
+    short_code = short_code.strip()
+
     conn = get_connection()
 
     result = conn.execute(
@@ -121,13 +125,13 @@ def stats(short_code):
 
     conn.close()
 
-    if not result:
+    if result is None:
         return "URL Not Found", 404
 
     return render_template(
         "stats.html",
-        original_url=result[0],
-        clicks=result[1]
+        original_url=result["original_url"],
+        clicks=result["clicks"]
     )
 
 
