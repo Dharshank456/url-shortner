@@ -22,10 +22,11 @@
                         ✅ URL Created
                     </h2>
 
+                    <!-- 🔥 FIXED: no localhost -->
                     <input
                         id="shortUrl"
                         class="form-control text-center mb-3"
-                        value="http://localhost:5000/{{ short_code }}"
+                        value="{{ request.host_url }}{{ short_code }}"
                         readonly
                     >
 
@@ -62,7 +63,6 @@
 <script>
 function copyUrl() {
     let copyText = document.getElementById("shortUrl");
-    copyText.select();
     navigator.clipboard.writeText(copyText.value);
     alert("Copied!");
 }

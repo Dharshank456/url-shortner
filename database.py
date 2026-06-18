@@ -6,9 +6,6 @@ DB_PATH = os.path.join(BASE_DIR, "urls.db")
 
 
 def get_connection():
-    # 🔥 ENSURE DIRECTORY EXISTS (IMPORTANT FOR CI)
-    os.makedirs(BASE_DIR, exist_ok=True)
-
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn

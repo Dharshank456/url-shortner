@@ -48,13 +48,8 @@ def shorten_url():
     conn.commit()
     conn.close()
 
-    short_url = request.host_url.rstrip("/") + "/" + short_code
-
-    return f"""
-    <h2>URL Created Successfully</h2>
-    <p><a href="{short_url}">{short_url}</a></p>
-    <p>View stats: <a href="/stats/{short_code}">Analytics</a></p>
-    """
+    # 🔥 IMPORTANT: no localhost, use dynamic host
+    return render_template("result.html", short_code=short_code)
 
 
 @app.route("/<short_code>")
@@ -101,17 +96,12 @@ def stats(short_code):
     if result is None:
         return "URL Not Found", 404
 
-    return f"""
-    <h2>Analytics Dashboard</h2>
+    return render_template(
+        "stats.html",
+        original_url=result["original_url"],
+        clicks=result["clicks"]
+    )
 
-    <p><b>Original URL:</b> {result['original_url']}</p>
-    <p><b>Total Clicks:</b> {result['clicks']}</p>
-
-    <hr>
-
-    <a href="/">Create Another URL</a>
-    """
-    
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

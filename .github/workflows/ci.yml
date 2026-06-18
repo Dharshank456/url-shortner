@@ -10,6 +10,7 @@ on:
       - main
 
 
+# 🔒 prevent multiple pipelines running together
 concurrency:
   group: url-shortener-pipeline
   cancel-in-progress: true
@@ -19,9 +20,6 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-
-    env:
-      INIT_DB: "1"
 
     steps:
       - name: Checkout Code
@@ -37,10 +35,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Init DB (safe for CI)
-        run: |
-          python -c "from database import init_db; init_db()"
-
       - name: Run Tests
         run: |
           pytest -v
@@ -51,8 +45,8 @@ jobs:
 
 
   build:
-    needs: test
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout Code
@@ -64,8 +58,8 @@ jobs:
 
 
   security-scan:
-    needs: build
     runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Checkout Code
@@ -85,8 +79,8 @@ jobs:
 
 
   docker-push:
-    needs: security-scan
     runs-on: ubuntu-latest
+    needs: security-scan
 
     steps:
       - name: Checkout Code
@@ -109,8 +103,8 @@ jobs:
 
 
   deploy:
-    needs: docker-push
     runs-on: ubuntu-latest
+    needs: docker-push
 
     if: github.ref == 'refs/heads/main'
 
