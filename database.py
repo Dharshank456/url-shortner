@@ -1,8 +1,9 @@
 import sqlite3
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "urls.db")
+# store DB in a guaranteed writable location
+DB_DIR = "/tmp"
+DB_PATH = os.path.join(DB_DIR, "urls.db")
 
 
 def get_connection():
