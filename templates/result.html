@@ -22,7 +22,7 @@
                         ✅ URL Created
                     </h2>
 
-                    <!-- 🔥 FIXED: no localhost -->
+                    <!-- Short URL -->
                     <input
                         id="shortUrl"
                         class="form-control text-center mb-3"
@@ -30,6 +30,7 @@
                         readonly
                     >
 
+                    <!-- Copy Button -->
                     <button
                         class="btn btn-success"
                         onclick="copyUrl()">
@@ -38,15 +39,12 @@
 
                     <br><br>
 
-                    <a
-                        class="btn btn-info"
-                        href="/stats/{{ short_code }}">
+                    <!-- Analytics -->
+                    <a class="btn btn-info" href="/stats/{{ short_code }}">
                         View Analytics
                     </a>
 
-                    <a
-                        class="btn btn-secondary"
-                        href="/">
+                    <a class="btn btn-secondary" href="/">
                         Create Another
                     </a>
 
@@ -60,11 +58,28 @@
 
 </div>
 
+<!-- 🔥 FIXED COPY LOGIC -->
 <script>
 function copyUrl() {
-    let copyText = document.getElementById("shortUrl");
-    navigator.clipboard.writeText(copyText.value);
-    alert("Copied!");
+    const text = document.getElementById("shortUrl").value;
+
+    // Create temporary textarea (works on HTTP + EC2 + all browsers)
+    const temp = document.createElement("textarea");
+    temp.value = text;
+
+    document.body.appendChild(temp);
+    temp.select();
+    temp.setSelectionRange(0, 99999);
+
+    try {
+        document.execCommand("copy");
+        alert("Copied!");
+    } catch (err) {
+        console.error("Copy failed:", err);
+        alert("Copy failed!");
+    }
+
+    document.body.removeChild(temp);
 }
 </script>
 
