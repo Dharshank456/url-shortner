@@ -15,18 +15,15 @@ concurrency:
 
 jobs:
 
-  # =========================
-  # 1. TEST
-  # =========================
   test:
     runs-on: self-hosted
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -36,45 +33,41 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Tests
-        run: pytest -v
+        run: |
+          pytest -v
 
       - name: Run Coverage
-        run: pytest --cov=. --cov-report=term-missing
+        run: |
+          pytest --cov=. --cov-report=term-missing
 
 
-  # =========================
-  # 2. BUILD
-  # =========================
   build:
     needs: test
     runs-on: self-hosted
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
           load: true
+          push: false
           tags: url-shortener:${{ github.sha }}
 
 
-  # =========================
-  # 3. SECURITY SCAN
-  # =========================
   security-scan:
     needs: build
     runs-on: self-hosted
 
     steps:
       - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: url-shortener:${{ github.sha }}
           format: table
@@ -82,27 +75,21 @@ jobs:
           severity: CRITICAL,HIGH
 
 
-  # =========================
-  # 4. DOCKER PUSH
-  # =========================
   docker-push:
     needs: security-scan
     runs-on: self-hosted
 
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Tag Image
         run: |
-          docker tag url-shortener:${{ github.sha }} \
-          dharshank456/url-shortener:${{ github.sha }}
-
-          docker tag url-shortener:${{ github.sha }} \
-          dharshank456/url-shortener:latest
+          docker tag url-shortener:${{ github.sha }} dharshank456/url-shortener:${{ github.sha }}
+          docker tag url-shortener:${{ github.sha }} dharshank456/url-shortener:latest
 
       - name: Push SHA Tag
         run: |
@@ -113,9 +100,6 @@ jobs:
           docker push dharshank456/url-shortener:latest
 
 
-  # =========================
-  # 5. DEPLOY
-  # =========================
   deploy:
     needs: docker-push
     runs-on: self-hosted
@@ -123,24 +107,26 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy Container
-        run: |
-          docker compose -f /opt/url-shortener/docker-compose.yml pull
-          docker compose -f /opt/url-shortener/docker-compose.yml up -d --force-recreate
-          docker image prune -f
+      - name: Deploy to Application EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker compose -f /opt/url-shortener/docker-compose.yml pull
+            docker compose -f /opt/url-shortener/docker-compose.yml up -d --force-recreate
+            docker image prune -f
 
 
-  # =========================
-  # 6. SLACK NOTIFICATION
-  # =========================
   notify:
     needs: deploy
     runs-on: self-hosted
     if: always()
 
     steps:
-      - name: Set Message
-        id: msg
+      - name: Set Notification Message
+        id: status
         run: |
           if [ "${{ needs.deploy.result }}" = "success" ]; then
             echo "message=✅ URL Shortener deployed successfully" >> $GITHUB_OUTPUT
@@ -149,19 +135,12 @@ jobs:
           fi
 
       - name: Send Slack Notification
-        uses: slackapi/slack-github-action@v3.0.3
+        uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: "${{ steps.msg.outputs.message }}"
-            blocks:
-              - type: section
-                text:
-                  type: mrkdwn
-                  text: |
-                    ${{ steps.msg.outputs.message }}
-
-                    *Repository:* ${{ github.repository }}
-                    *Branch:* ${{ github.ref_name }}
-                    *Commit:* ${{ github.sha }}
+            text: "${{ steps.status.outputs.message }}
+            Repo: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}"
