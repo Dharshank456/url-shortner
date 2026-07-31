@@ -15,7 +15,7 @@ service:
 app:
   name: URL Shortener
   env: production
-  version: "1.0.1"
+  version: "1.0.2"
 
 database:
   host: url-shortener-db.cxysgs6sm5jg.ap-south-1.rds.amazonaws.com
