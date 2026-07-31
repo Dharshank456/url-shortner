@@ -1,28 +1,40 @@
-import sqlite3
 import os
+import psycopg
+from psycopg.rows import dict_row
 
-# store DB in a guaranteed writable location
-DB_DIR = "/tmp"
-DB_PATH = os.path.join(DB_DIR, "urls.db")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "urlshortener")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return psycopg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        row_factory=dict_row
+    )
 
 
 def init_db():
     conn = get_connection()
+    cur = conn.cursor()
 
-    conn.execute("""
+    cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS urls (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            short_code TEXT UNIQUE NOT NULL,
+            id SERIAL PRIMARY KEY,
+            short_code VARCHAR(255) UNIQUE NOT NULL,
             original_url TEXT NOT NULL,
             clicks INTEGER DEFAULT 0
         )
-    """)
+        """
+    )
 
     conn.commit()
+    cur.close()
     conn.close()

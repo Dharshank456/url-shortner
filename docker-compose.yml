@@ -1,12 +1,56 @@
 services:
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+
+    environment:
+      POSTGRES_DB: urlshortener
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d urlshortener"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+
   url-shortener:
     build: .
+
     container_name: url-shortener
+
+    depends_on:
+      postgres:
+        condition: service_healthy
 
     ports:
       - "5000:5000"
 
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: urlshortener
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+      APP_NAME: URL Shortener
+      APP_ENV: Development
+      APP_VERSION: 1.0.0
+
+      SECRET_KEY: local-development-secret
+
     restart: unless-stopped
 
-    volumes:
-      - ./urls.db:/app/urls.db
+
+volumes:
+  postgres_data:

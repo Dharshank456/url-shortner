@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: url-shortener-config
+  namespace: {{ .Values.namespace }}
+
+data:
+  APP_NAME: "{{ .Values.app.name }}"
+  APP_ENV: "{{ .Values.app.env }}"
+  APP_VERSION: "{{ .Values.app.version }}"
+
+  DB_HOST: "{{ .Values.database.host }}"
+  DB_PORT: "{{ .Values.database.port }}"
+  DB_NAME: "{{ .Values.database.name }}"
+  DB_USER: "{{ .Values.database.user }}"

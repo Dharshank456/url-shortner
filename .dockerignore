@@ -1,5 +1,8 @@
-venv/
-__pycache__/
-.pytest_cache/
-.git/
-urls.db
+venv
+.git
+.github
+tests
+README.md
+__pycache__
+*.pyc
+*.db

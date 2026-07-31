@@ -1,0 +1,56 @@
+namespace: url-shortener
+
+replicaCount: 3
+
+image:
+  repository: 877643335351.dkr.ecr.ap-south-1.amazonaws.com/url-shortener
+  tag: "1.0.1"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+
+app:
+  name: URL Shortener
+  env: production
+  version: "1.0.1"
+
+database:
+  host: url-shortener-db.cxysgs6sm5jg.ap-south-1.rds.amazonaws.com
+  port: "5432"
+  name: urlshortener
+  user: postgres
+  password: dharshandb
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readiness:
+    path: /ready
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+  startup:
+    path: /health
+    failureThreshold: 30
+    periodSeconds: 5
