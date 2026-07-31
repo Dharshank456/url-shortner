@@ -4,7 +4,7 @@ replicaCount: 3
 
 image:
   repository: 877643335351.dkr.ecr.ap-south-1.amazonaws.com/url-shortener
-  tag: "1.0.1"
+  tag: "2b9d0d9834dfc14baa77f92dfa63384eda3e8dc4"
   pullPolicy: IfNotPresent
 
 service:
