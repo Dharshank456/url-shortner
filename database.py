@@ -2,6 +2,7 @@ import os
 import psycopg
 from psycopg.rows import dict_row
 
+
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "urlshortener")
@@ -10,6 +11,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
 
 def get_connection():
+
     return psycopg.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -20,21 +22,27 @@ def get_connection():
     )
 
 
+
 def init_db():
-    conn = get_connection()
-    cur = conn.cursor()
 
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS urls (
-            id SERIAL PRIMARY KEY,
-            short_code VARCHAR(255) UNIQUE NOT NULL,
-            original_url TEXT NOT NULL,
-            clicks INTEGER DEFAULT 0
-        )
-        """
-    )
+    with get_connection() as conn:
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS urls (
+
+                    id SERIAL PRIMARY KEY,
+
+                    short_code VARCHAR(255) UNIQUE NOT NULL,
+
+                    original_url TEXT NOT NULL,
+
+                    clicks INTEGER DEFAULT 0
+
+                )
+                """
+            )
+
+        conn.commit()
