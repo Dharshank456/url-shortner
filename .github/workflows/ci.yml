@@ -1,6 +1,5 @@
 name: URL Shortener CI/CD
 
-
 on:
   push:
     branches:
@@ -10,252 +9,206 @@ on:
     branches:
       - main
 
-
 concurrency:
   group: url-shortener-pipeline
   cancel-in-progress: true
 
-
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: url-shortener
+  ECR_REGISTRY: 877643335351.dkr.ecr.ap-south-1.amazonaws.com
   IMAGE_TAG: ${{ github.sha }}
-
-
 
 jobs:
 
-# ---------------------------
-# 1. Application Testing
-# ---------------------------
-
   test:
-
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: urlshortener
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd="pg_isready -U postgres -d urlshortener"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: urlshortener
+      DB_USER: postgres
+      DB_PASSWORD: postgres
 
     steps:
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
+      - name: Wait for PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
 
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+          until pg_isready \
+            -h localhost \
+            -p 5432 \
+            -U postgres
+          do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
 
+      - name: Initialize Database
+        run: |
+          python - <<EOF
+          from database import init_db
+          init_db()
+          print("Database initialized")
+          EOF
 
-    - name: Run Tests
-      run: |
-        pytest -v
+      - name: Verify Table
+        run: |
+          PGPASSWORD=postgres psql \
+            -h localhost \
+            -U postgres \
+            -d urlshortener \
+            -c "\dt"
 
-
-# ---------------------------
-# 2. Docker Build
-# ---------------------------
-
+      - name: Run Tests
+        run: |
+          pytest -v
 
   build:
-
     needs: test
 
     runs-on: ubuntu-latest
 
-
     steps:
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t $ECR_REPOSITORY:$IMAGE_TAG \
+            .
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Save Docker Image
+        run: |
+          docker save \
+            $ECR_REPOSITORY:$IMAGE_TAG \
+            -o image.tar
 
-
-    - name: Login to Amazon ECR
-      uses: aws-actions/amazon-ecr-login@v2
-
-
-    - name: Build Docker Image
-
-      run: |
-
-        docker build \
-        -t $ECR_REPOSITORY:$IMAGE_TAG \
-        .
-
-
-# ---------------------------
-# 3. Security Scan
-# ---------------------------
-
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar
 
   security-scan:
-
     needs: build
 
     runs-on: ubuntu-latest
 
-
     steps:
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Load Image
+        run: |
+          docker load -i image.tar
 
-
-    - name: Run Trivy Scan
-
-      uses: aquasecurity/trivy-action@master
-
-      with:
-
-        image-ref: url-shortener:${{ github.sha }}
-
-        format: table
-
-        severity: HIGH,CRITICAL
-
-        exit-code: 0
-
-
-
-# ---------------------------
-# 4. Push Image to ECR
-# ---------------------------
-
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: url-shortener:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 0
 
   push-image:
-
-
     needs: security-scan
 
     runs-on: ubuntu-latest
 
-
     steps:
 
+      - uses: actions/checkout@v4
 
-    - name: Checkout Code
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
 
-      uses: actions/checkout@v4
+      - name: Load Image
+        run: |
+          docker load -i image.tar
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Configure AWS Credentials
+      - name: Tag Image
+        run: |
+          docker tag \
+            $ECR_REPOSITORY:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      uses: aws-actions/configure-aws-credentials@v4
-
-      with:
-
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-        aws-region: ${{ env.AWS_REGION }}
-
-
-
-    - name: Login to ECR
-
-      uses: aws-actions/amazon-ecr-login@v2
-
-
-
-    - name: Build Image
-
-
-      run: |
-
-
-        docker build \
-        -t $ECR_REPOSITORY:$IMAGE_TAG \
-        .
-
-
-
-    - name: Tag Image
-
-
-      run: |
-
-
-        docker tag \
-        $ECR_REPOSITORY:$IMAGE_TAG \
-        877643335351.dkr.ecr.ap-south-1.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-
-
-    - name: Push Image
-
-
-      run: |
-
-
-        docker push \
-        877643335351.dkr.ecr.ap-south-1.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
-
-
-
-# ---------------------------
-# 5. Update Helm Image Tag
-# ---------------------------
-
+      - name: Push Image
+        run: |
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   update-helm:
-
-
     needs: push-image
 
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
 
     steps:
 
+      - uses: actions/checkout@v4
 
-    - name: Checkout Repository
+      - name: Update Image Tag
+        run: |
+          sed -i \
+          "s/tag:.*/tag: \"${{ github.sha }}\"/" \
+          helm/url-shortener/values.yaml
 
-      uses: actions/checkout@v4
+      - name: Commit Changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
+          git add helm/url-shortener/values.yaml
 
+          git diff --cached --quiet || \
+          git commit -m "Update image tag to ${{ github.sha }}"
 
-    - name: Update Image Tag
-
-
-      run: |
-
-
-        sed -i \
-        "s/tag:.*/tag: \"${{ github.sha }}\"/" \
-        helm/url-shortener/values.yaml
-
-
-
-    - name: Commit Changes
-
-
-      run: |
-
-
-        git config --global user.name "github-actions"
-
-        git config --global user.email "github-actions@github.com"
-
-
-        git add helm/url-shortener/values.yaml
-
-
-        git commit -m "Update image tag to ${{ github.sha }}" || exit 0
-
-
-        git push
+          git push
